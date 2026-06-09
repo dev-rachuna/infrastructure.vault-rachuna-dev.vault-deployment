@@ -1,0 +1,36 @@
+---
+- name: Configure Vault
+  block:
+    - name: Create vault configuration directory
+      ansible.builtin.file:
+        path: /etc/vault.d
+        state: directory
+        mode: "0755"
+        owner: vault
+        group: vault
+      notify: Restart vault
+
+    - name: Create vault data directory
+      ansible.builtin.file:
+        path: /opt/vault/data
+        state: directory
+        mode: "0750"
+        owner: vault
+        group: vault
+
+    - name: Validate Vault storage backend configuration
+      ansible.builtin.assert:
+        that:
+          - (in_consul_config.enabled | default(false) | bool) or (in_raft_config.enabled | default(false) | bool)
+          - not ((in_consul_config.enabled | default(false) | bool) and (in_raft_config.enabled | default(false) | bool))
+          - not (in_raft_config.enabled | default(false) | bool) or (in_raft_config.path is defined and in_raft_config.node_id is defined)
+        fail_msg: "Configure exactly one Vault storage backend. Raft requires in_raft_config.path and in_raft_config.node_id."
+
+    - name: Create vault configuration file
+      ansible.builtin.template:
+        src: "vault.hcl.j2"
+        dest: "/etc/vault.d/vault.hcl"
+        mode: "0644"
+        owner: root
+        group: root
+      notify: Restart vault

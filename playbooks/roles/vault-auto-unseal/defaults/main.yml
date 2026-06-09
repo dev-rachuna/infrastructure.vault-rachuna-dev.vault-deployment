@@ -1,0 +1,5 @@
+---
+in_unseal_keys: []
+in_node_fqdn: "{{ ansible_facts.hostname }}"
+in_vault_tls_disabled: true
+in_vault_reconfigure_interval: "30min"

@@ -1,0 +1,7 @@
+---
+inv_user_accounts:
+  mrachuna: "{{ inv_all_user_accounts.mrachuna }}"
+  dragoslawai: "{{ inv_all_user_accounts.dragoslawai }}"
+
+inv_technical_accounts:
+  techuser: "{{ inv_all_technical_accounts.techuser }}"

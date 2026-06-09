@@ -1,0 +1,32 @@
+---
+inv_group_keepalived_config:
+  validate_config: true
+
+  global_defs:
+    router_id: "{{ inventory_hostname }}"
+
+  vrrp_scripts:
+    - name: chk_vault
+      script: "/usr/bin/curl -sf --max-time 3 https://{{ inventory_hostname }}.{{ inv_all_root_root_domain }}:8200/v1/sys/health?sealedcode=503&standbycode=503 -k -o /dev/null"
+      interval: 5
+      weight: -30
+      fall: 3
+      rise: 2
+
+  instances:
+    - name: VAULT_VIP
+      interface: eth0
+      virtual_router_id: 254
+      priority: "{{ inv_keepalived_priority | default(100) }}"
+      advert_int: 1
+      nopreempt: true
+      unicast:
+        enabled: true
+        peers: "{{ groups['vault'] | map('extract', hostvars, 'ansible_host_ip') | list }}"
+      authentication:
+        auth_type: PASS
+        auth_pass: "{{ inv_secret_keepalived_auth_pass }}"
+      track_script:
+        - chk_vault
+      virtual_ipaddresses:
+        - 10.3.2.254/24

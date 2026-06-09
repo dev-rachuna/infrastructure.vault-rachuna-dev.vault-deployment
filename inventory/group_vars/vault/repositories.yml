@@ -1,0 +1,7 @@
+---
+inv_group_repositories:
+  - repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com {{ ansible_facts.distribution_release }} main"
+    filename: "hashicorp"
+    self_signed_repository_key: "https://apt.releases.hashicorp.com/gpg"
+    keyring_name: "hashicorp-archive-keyring.gpg"
+    state: present

@@ -1,0 +1,45 @@
+---
+- name: Install vault (Debian)
+  block:
+    - name: Ensure required dependencies are installed
+      ansible.builtin.apt:
+        name:
+          - gnupg
+          - curl
+          - apt-transport-https
+          - ca-certificates
+          - jq
+        state: present
+        update_cache: true
+
+    - name: Download HashiCorp GPG key
+      ansible.builtin.get_url:
+        url: https://apt.releases.hashicorp.com/gpg
+        dest: /tmp/hashicorp.gpg.asc
+        mode: "0644"
+        force: false
+
+    - name: Dearmor and install HashiCorp GPG key
+      ansible.builtin.command:
+        cmd: gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg /tmp/hashicorp.gpg.asc
+        creates: /usr/share/keyrings/hashicorp-archive-keyring.gpg
+
+    - name: Add HashiCorp APT repository
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [arch={{ in_vault_arch_map[ansible_facts["architecture"]] | default('amd64') }}
+          signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg]
+          https://apt.releases.hashicorp.com {{ ansible_facts["distribution_release"] }} main
+        state: present
+        filename: hashicorp
+
+    - name: Install vault
+      ansible.builtin.apt:
+        name: vault
+        state: present
+        update_cache: true
+
+  rescue:
+    - name: Print error if vault installation fails
+      ansible.builtin.fail:
+        msg: "Vault installation failed! Check logs."

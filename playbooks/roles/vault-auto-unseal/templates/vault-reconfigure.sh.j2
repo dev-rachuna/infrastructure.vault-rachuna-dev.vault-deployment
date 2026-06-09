@@ -1,0 +1,16 @@
+#!/bin/bash
+# Vault reconfiguration script - runs periodically via systemd timer
+
+set -e
+
+PLAYBOOK_DIR="/path/to/playbooks"
+LOG_FILE="/var/log/vault-reconfigure.log"
+
+{
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting Vault reconfiguration..."
+
+  cd "$PLAYBOOK_DIR"
+  ansible-playbook install.yml -i inventory/hosts.yml
+
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Vault reconfiguration completed successfully"
+} >> "$LOG_FILE" 2>&1

@@ -1,0 +1,58 @@
+---
+- name: Install vault (Alpine)
+  block:
+    - name: Install required packages on Alpine
+      ansible.builtin.apk:
+        name:
+          - zip
+          - jq
+          - curl
+        state: present
+        update_cache: true
+
+    - name: Download vault binary
+      ansible.builtin.get_url:
+        url: "https://releases.hashicorp.com/vault/{{ in_vault_version }}/vault_{{ in_vault_version }}_linux_{{ in_vault_arch_map[ansible_facts[\"architecture\"]] | default('amd64') }}.zip"
+        dest: "/tmp/vault.zip"
+        mode: "0644"
+        force: false
+
+    - name: Unzip vault binary
+      ansible.builtin.unarchive:
+        src: "/tmp/vault.zip"
+        dest: "/usr/local/bin/"
+        remote_src: true
+        mode: "0755"
+
+    - name: Ensure vault is executable
+      ansible.builtin.file:
+        path: "/usr/local/bin/vault"
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Create OpenRC service file for Vault
+      ansible.builtin.copy:
+        dest: /etc/init.d/vault
+        mode: "0755"
+        owner: root
+        group: root
+        content: |
+          #!/sbin/openrc-run
+
+          description="Vault agent"
+          command="/usr/local/bin/vault"
+          command_args="agent -config-dir=/etc/vault.d"
+          pidfile="/run/vault.pid"
+          command_user="vault:vault"
+          start_stop_daemon_args="--background"
+
+          depend() {
+              need net
+              use dns logger
+          }
+
+  rescue:
+    - name: Print error if vault installation fails
+      ansible.builtin.fail:
+        msg: "Vault installation failed! Check logs."

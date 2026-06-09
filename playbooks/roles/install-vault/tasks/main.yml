@@ -1,0 +1,29 @@
+---
+- name: Create vault group
+  ansible.builtin.group:
+    name: vault
+    system: true
+    state: present
+
+- name: Create vault user
+  ansible.builtin.user:
+    name: vault
+    group: vault
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: Include install packages tasks
+  ansible.builtin.include_tasks: "install-{{ ansible_facts[\"os_family\"] | lower }}.yml"
+
+- name: Include configure Vault tasks
+  ansible.builtin.include_tasks: "configure-vault.yml"
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Enable vault
+  ansible.builtin.service:
+    name: vault
+    enabled: true

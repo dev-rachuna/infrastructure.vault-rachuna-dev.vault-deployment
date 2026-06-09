@@ -1,0 +1,23 @@
+---
+in_debug: false
+in_vault_version: "1.19.0"
+in_vault_address: "http://localhost:8200"
+
+in_vault_arch_map:
+  x86_64: amd64
+  aarch64: arm64
+
+in_consul_config:
+  enabled: false
+  address: "http://localhost:8500"
+  token: null
+  scheme: http
+
+in_raft_config:
+  enabled: false
+  path: /opt/vault/data
+  node_id: "{{ ansible_facts.hostname }}"
+
+in_node_fqdn: "{{ ansible_facts.hostname }}"
+in_vault_disable_mlock: true
+in_vault_tls_disabled: true

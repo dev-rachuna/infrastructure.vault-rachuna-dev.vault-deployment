@@ -1,0 +1,7 @@
+{
+  "unseal_keys": [
+{% for key in in_unseal_keys -%}
+  "{{ key }}"{% if not loop.last %},{% endif %}
+{% endfor %}
+  ]
+}

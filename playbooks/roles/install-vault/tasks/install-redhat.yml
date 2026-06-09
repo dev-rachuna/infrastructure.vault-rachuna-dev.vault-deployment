@@ -1,0 +1,24 @@
+---
+- name: Install vault (RedHat)
+  block:
+    - name: Ensure required dependencies are installed
+      ansible.builtin.package:
+        name: curl
+        state: present
+
+    - name: Add HashiCorp YUM repository
+      ansible.builtin.get_url:
+        url: "https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo"
+        dest: /etc/yum.repos.d/hashicorp.repo
+        mode: "0644"
+
+    - name: Install vault
+      ansible.builtin.package:
+        name: vault
+        state: present
+        update_cache: true
+
+  rescue:
+    - name: Print error if vault installation fails
+      ansible.builtin.fail:
+        msg: "Vault installation failed! Check logs."

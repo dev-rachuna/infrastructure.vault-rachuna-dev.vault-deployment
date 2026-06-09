@@ -1,0 +1,70 @@
+---
+- name: Proxmox Hardening Machine
+  hosts: ['vault']
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: set-timezone
+      vars:
+        in_timezone: "{{ inv_all_timezone }}"
+        in_locale: "{{ inv_all_locale }}"
+        in_language: "{{ inv_all_language }}"
+        in_lc_all: "{{ inv_all_lc_all }}"
+
+    - role: users-management
+      vars:
+        in_groups: "{{ inv_all_groups }}"
+        in_user_accounts: "{{ inv_all_user_accounts }}"
+        in_technical_accounts: "{{ inv_all_technical_accounts }}"
+
+    - role: sudo
+      vars:
+        in_custom_groups: "{{ inv_all_sudo_groups }}"
+
+    - role: set-hostname
+      vars:
+        in_hostname_fqdn: "{{ fqdn }}"
+        in_disable_reboot: "{{ inv_disable_set_hostname }}"
+
+    - role: ssh-hardening
+      vars:
+        in_sshd_config: "{{ inv_sshd_config }}"
+
+    - role: install-packages
+      vars:
+        in_ubuntu_repositories: "{{ inv_group_repositories | default([]) }}"
+        in_packages_to_install: "{{ inv_group_packages | default([]) }}"
+        in_packages_to_remove: "{{ inv_group_remove_packages | default([]) }}"
+        in_disable_reboot: "{{ inv_disable_set_hostname }}"
+
+    - role: certificates
+      vars:
+        in_certificates: "{{ inv_certificates }}"
+        in_tls_certificates: "{{ inv_tls_certificates }}"
+        in_certificates_vault_addr: "{{ inv_certificates_vault_addr }}"
+        in_certificates_bundle_paths: "{{ inv_certificates_bundle_paths }}"
+        in_enabled_generate_certificates: "{{ inv_enabled_generate_certificates }}"
+
+    - role: haproxy
+      vars:
+        in_haproxy: "{{ inv_group_haproxy_config }}"
+
+    - role: install-vault
+      vars:
+        in_vault_address: "{{ inv_group_vault_address }}"
+        in_node_fqdn: "{{ inv_group_vault_node_fqdn }}"
+        in_vault_tls_disabled: "{{ inv_group_vault_tls_disabled | bool }}"
+        in_vault_disable_mlock: "{{ inv_group_vault_disable_mlock | bool }}"
+        in_raft_config: "{{ inv_group_vault_raft_config }}"
+        in_consul_config: "{{ inv_group_vault_consul_config }}"
+
+    - role: vault-auto-unseal
+      vars:
+        in_unseal_keys: "{{ inv_unseal_keys }}"
+        in_node_fqdn: "{{ ansible_facts.hostname }}"
+        in_vault_tls_disabled: "{{ inv_group_vault_tls_disabled | bool }}"
+
+    - role: install-keepalived-vip
+      vars:
+        in_keepalived: "{{ inv_group_keepalived_config }}"

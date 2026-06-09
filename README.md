@@ -1,93 +1,148 @@
-# vault-deployment
+# <img src=".gitlab/ansible.png" alt="Ansible" height="30"/> Ansible - klaster HashiCorp Vault
 
-Instalacja clustra vault za pomocą Ansible
+Playbook Ansible przygotowujący trzywęzłowy klaster HashiCorp Vault wraz z systemem operacyjnym, certyfikatami TLS, HAProxy oraz wirtualnym adresem IP zarządzanym przez Keepalived.
 
-## Getting started
+::include{file=.gitlab/badges.md}
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+---
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Zakres projektu
 
-## Add your files
+Playbook `playbooks/install.yml` wykonuje następujące operacje na hostach z grupy `vault`:
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+- konfiguruje strefę czasową, locale oraz nazwę hosta,
+- zarządza kontami użytkowników, grupami i uprawnieniami `sudo`,
+- utwardza konfigurację SSH,
+- instaluje wymagane pakiety i zaufane certyfikaty CA,
+- instaluje oraz konfiguruje HashiCorp Vault,
+- konfiguruje magazyn danych Integrated Storage (Raft),
+- uruchamia HAProxy w trybie TCP passthrough,
+- konfiguruje Keepalived i wspólny adres VIP,
+- instaluje lokalny mechanizm automatycznego unseal oraz okresowej rekonfiguracji.
 
+## Architektura
+
+| Host | Adres IP | Rola Keepalived |
+| --- | --- | --- |
+| `vault-1005.rachuna.dev` | `10.3.2.5` | MASTER |
+| `vault-1006.rachuna.dev` | `10.3.2.6` | BACKUP |
+| `vault-1007.rachuna.dev` | `10.3.2.7` | BACKUP |
+
+Wirtualny adres klastra to `10.3.2.254/24`. HAProxy nasłuchuje na porcie `443` i przekazuje ruch TLS do aktywnego, odpieczętowanego węzła Vault na porcie `8200`. Statystyki HAProxy są dostępne na porcie `8404` pod ścieżką `/stats`.
+
+Vault działa z włączonym TLS i interfejsem UI. Domyślnym backendem storage jest Raft; konfiguracja Consul jest dostępna w roli, ale pozostaje wyłączona.
+
+## Wymagania
+
+Kontroler Ansible musi mieć:
+
+- dostęp SSH do wszystkich hostów z inventory,
+- użytkownika z możliwością użycia `become`,
+- Ansible oraz kolekcję `community.hashi_vault`,
+- dostęp do repozytoriów GitLab wskazanych w `requirements.yml`,
+- dostęp do Vault przechowującego sekrety używane przez inventory,
+- poprawne rekordy DNS dla węzłów i adresu `vault.rachuna.dev`.
+
+Hosty docelowe muszą używać wspieranego systemu z rodziny Debian, RedHat lub Alpine i udostępniać interpreter Python wskazany w `inventory/host_vars/`.
+
+## Przygotowanie
+
+1. Zainstaluj kolekcję i role Ansible:
+
+   ```bash
+   ansible-galaxy collection install community.hashi_vault
+   ansible-galaxy role install -r requirements.yml -p playbooks/roles
+   ```
+
+2. Ustaw zmienne środowiskowe wymagane przez inventory i lookupy Vault:
+
+   ```bash
+   export ANSIBLE_USER="tech_user"
+   export ANSIBLE_PASSWORD="<haslo-become>"
+   export VAULT_ADDR="https://vault.example.org"
+   export VAULT_TOKEN="<token>"
+   ```
+
+   W środowisku z prywatnym CA ustaw również `REQUESTS_CA_BUNDLE` na plik zawierający zaufany łańcuch certyfikatów. Projekt zawiera `.envrc`, który może być ładowany przez `direnv`; nie należy umieszczać w nim sekretów przeznaczonych do commitowania.
+
+3. Zweryfikuj wartości w:
+
+   - `inventory/hosts.yml` oraz `inventory/host_vars/`,
+   - `inventory/group_vars/all/` dla kont, certyfikatów, locale i SSH,
+   - `inventory/group_vars/vault/` dla Vault, HAProxy, Keepalived i repozytoriów.
+
+Sekrety są pobierane przez lookup `community.hashi_vault.vault_kv2_get`. Ścieżki i mount pointy znajdują się w `inventory/group_vars/all/secrets.yml`.
+
+## Uruchomienie
+
+Najpierw sprawdź łączność z hostami:
+
+```bash
+ansible-playbook -i inventory/hosts.yml playbooks/test_connection.yml
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/dev.rachuna/infrastructure/vault-rachuna-dev/vault-deployment.git
-git branch -M main
-git push -uf origin main
+
+Sprawdź składnię playbooka:
+
+```bash
+ansible-playbook -i inventory/hosts.yml playbooks/install.yml --syntax-check
 ```
 
-## Integrate with your tools
+Uruchom wdrożenie:
 
-* [Set up project integrations](https://gitlab.com/dev.rachuna/infrastructure/vault-rachuna-dev/vault-deployment/-/settings/integrations)
+```bash
+ansible-playbook -i inventory/hosts.yml playbooks/install.yml
+```
 
-## Collaborate with your team
+Zakres wykonania można ograniczyć standardowymi opcjami Ansible, na przykład do jednego hosta:
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+```bash
+ansible-playbook -i inventory/hosts.yml playbooks/install.yml --limit vault-1005
+```
 
-## Test and Deploy
+## Weryfikacja
 
-Use the built-in continuous integration in GitLab.
+Po wdrożeniu sprawdź stan usług na węzłach:
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+```bash
+systemctl status vault vault-unseal.service vault-reconfigure.timer haproxy keepalived
+```
 
-***
+Stan Vault można zweryfikować przez API klastra:
 
-# Editing this README
+```bash
+curl --cacert /etc/vault.d/ca.crt https://vault.rachuna.dev/v1/sys/health
+```
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Struktura repozytorium
 
-## Suggestions for a good README
+```text
+.
+├── inventory/
+│   ├── group_vars/            # konfiguracja wspólna i grupy vault
+│   ├── host_vars/             # parametry poszczególnych węzłów
+│   └── hosts.yml              # inventory klastra
+├── playbooks/
+│   ├── roles/
+│   │   ├── install-vault/     # instalacja i konfiguracja Vault
+│   │   └── vault-auto-unseal/ # lokalny auto-unseal i rekonfiguracja
+│   ├── install.yml            # główny playbook wdrożeniowy
+│   └── test_connection.yml    # test dostępu do hostów
+└── requirements.yml           # zewnętrzne role Ansible
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## Bezpieczeństwo
 
-## Name
-Choose a self-explaining name for your project.
+Rola `vault-auto-unseal` zapisuje klucz unseal na każdym węźle w pliku `/etc/vault.d/unseal_keys.json`. Jest to rozwiązanie przeznaczone wyłącznie dla środowiska deweloperskiego i nie powinno być używane w produkcji. W środowisku produkcyjnym należy zastosować wspierany mechanizm auto-unseal, np. KMS, HSM lub Transit Secrets Engine.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+Nie zapisuj tokenów Vault, haseł, kluczy unseal ani prywatnych kluczy SSH w repozytorium. Sekrety powinny być przekazywane przez bezpieczne zmienne środowiskowe albo pobierane z dedykowanego magazynu sekretów.
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+## Uwagi
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+- Rola `install-vault` domyślnie instaluje Vault `1.19.0`.
+- Konfiguracja wymaga dokładnie jednego backendu storage: Raft albo Consul.
+- Pierwsza inicjalizacja klastra Vault i dołączanie kolejnych węzłów Raft nie są wykonywane przez główny playbook.
+- Generowanie certyfikatów jest obecnie wyłączone przez `inv_enabled_generate_certificates: false`; wymagane pliki TLS muszą istnieć przed uruchomieniem Vault.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+---
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+::include{file=.gitlab/footer.md}

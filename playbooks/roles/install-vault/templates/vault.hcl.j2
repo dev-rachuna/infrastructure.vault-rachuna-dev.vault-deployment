@@ -1,0 +1,49 @@
+# /etc/vault.d/vault.hcl
+{% if in_vault_tls_disabled == true %}
+api_addr = "http://{{ in_node_fqdn }}:8200"
+cluster_addr = "http://{{ in_node_fqdn }}:8201"
+{% else %}
+api_addr = "https://{{ in_node_fqdn }}:8200"
+cluster_addr = "https://{{ in_node_fqdn }}:8201"
+{% endif %}
+
+ui = true
+enable_response_header_hostname = true
+disable_mlock = {{ (in_vault_disable_mlock | bool) | lower }}
+
+{% if in_consul_config is defined and (in_consul_config.enabled | default(false) | bool) %}
+storage "consul" {
+  address = "{{ in_consul_config.address }}"
+  path    = "vault/"
+  token   = "{{ in_consul_config.token }}"
+  scheme  = "{{ in_consul_config.scheme | default("http") }}"
+  tls_skip_verify = {{ (in_consul_config.tls_skip_verify | default(false) | bool) | lower }}
+}
+
+{% elif in_raft_config is defined and (in_raft_config.enabled | default(false) | bool) %}
+storage "raft" {
+  path    = "{{ in_raft_config.path }}"
+  node_id = "{{ in_raft_config.node_id }}"
+}
+
+{% else %}
+{{ in_vault_storage_backend_must_be_configured }}
+{% endif %}
+
+{% if in_vault_tls_disabled == true %}
+listener "tcp" {
+  address         = "0.0.0.0:8200"
+  cluster_address = "0.0.0.0:8201"
+  tls_disable     = 1
+}
+{% else %}
+listener "tcp" {
+  address         = "0.0.0.0:8200"
+  cluster_address = "0.0.0.0:8201"
+  tls_disable     = 0
+
+  tls_cert_file = "/etc/vault.d/vault.crt"
+  tls_key_file  = "/etc/vault.d/vault.key"
+  tls_client_ca_file = "/etc/vault.d/ca.crt"
+}
+{% endif %}

@@ -1,0 +1,27 @@
+---
+inv_group_vault_address: "https://{{ inventory_hostname }}.{{ inv_all_root_root_domain }}"
+inv_group_vault_node_fqdn: "{{ inventory_hostname }}.{{ inv_all_root_root_domain }}"
+
+inv_group_vault_tls_disabled: false
+inv_group_vault_disable_mlock: true
+
+inv_group_vault_raft_config:
+  enabled: true
+  path: /opt/vault/data
+  node_id: "{{ inventory_hostname }}"
+
+inv_group_vault_consul_config:
+  enabled: false
+
+# # Certificates from PKI - configure when Vault and PKI are ready
+inv_group_certificates_enabled: true
+inv_group_certificates_vault_addr: "https://localhost:8200"
+inv_group_certificates_pki_intermediate_url: "pki-int-test"
+inv_group_certificates_pki_role: "vault-cluster"
+inv_group_certificates_pki_root_ca_path: "pki-root"
+
+# inv_unseal_keys:
+#   - "{{ lookup('env', 'VAULT_UNSEAL_KEY_1') }}"
+
+inv_unseal_keys:
+  - "{{ inv_secret_unseal_keys_1 }}"

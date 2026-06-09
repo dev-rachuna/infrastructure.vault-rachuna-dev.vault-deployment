@@ -1,0 +1,42 @@
+---
+# inv_certificates_vault_addr: https://vault.rachuna.dev
+inv_certificates_vault_addr: https://vault-1005.rachuna.dev:8200
+
+inv_certificates_bundle_paths:
+  - /etc/vault.d/ca.crt
+
+inv_certificates:
+  ca_cert:
+    name: rachuna-dev-root-ca
+    url: "{{ inv_certificates_vault_addr }}/v1/pki-root/ca/pem"
+  int_prod:
+    name: rachuna-dev-int-prod
+    url: "{{ inv_certificates_vault_addr }}/v1/pki-int-prod/ca/pem"
+  int_test:
+    name: rachuna-dev-int-test
+    url: "{{ inv_certificates_vault_addr }}/v1/pki-int-test/ca/pem"
+
+inv_enabled_generate_certificates: false
+
+inv_tls_certificates:
+  - pki: pki-int-prod
+    role: vault
+    cert_file_paths:
+      - /etc/vault.d/vault.crt
+    key_file_paths:
+      - /etc/vault.d/vault.key
+    pem_file_paths:
+      - /etc/haproxy/certs/vault.rachuna.dev.pem
+    common_name: vault.rachuna.dev
+    alt_names:
+      - vault-1005.rachuna.dev
+      - vault-1006.rachuna.dev
+      - vault-1007.rachuna.dev
+      - vault-1005
+      - vault-1006
+      - vault-1007
+    ip_sans:
+      - 10.3.2.5
+      - 10.3.2.6
+      - 10.3.2.7
+      - 10.3.2.254

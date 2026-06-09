@@ -1,0 +1,111 @@
+---
+- name: Non-production mechanism warning
+  ansible.builtin.debug:
+    msg: "Local auto unseal is enabled. This is not recommended for production environments."
+
+- name: Create unseal key json
+  ansible.builtin.template:
+    src: "unseal_keys.json.j2"
+    dest: "/etc/vault.d/unseal_keys.json"
+    mode: "0600"
+    owner: root
+    group: root
+
+- name: Create auto unseal script
+  ansible.builtin.template:
+    src: "vault-unseal.sh.j2"
+    dest: "/usr/local/bin/vault-unseal.sh"
+    mode: "0700"
+    owner: root
+    group: root
+
+- name: Create systemd service for auto unseal
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/vault-unseal.service
+    mode: "0644"
+    owner: root
+    group: root
+    content: |
+      [Unit]
+      Description=Unseal Vault automatically
+      After=network-online.target vault.service
+      Requires=vault.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/vault-unseal.sh
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Enable vault-unseal service
+  ansible.builtin.systemd:
+    name: vault-unseal.service
+    enabled: true
+    daemon_reload: true
+    state: started
+
+- name: Create vault reconfiguration script
+  ansible.builtin.template:
+    src: "vault-reconfigure.sh.j2"
+    dest: "/usr/local/bin/vault-reconfigure.sh"
+    mode: "0700"
+    owner: root
+    group: root
+
+- name: Create systemd service for vault reconfiguration
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/vault-reconfigure.service
+    mode: "0644"
+    owner: root
+    group: root
+    content: |
+      [Unit]
+      Description=Vault periodic reconfiguration
+      After=network-online.target vault.service
+      Requires=vault.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/vault-reconfigure.sh
+      StandardOutput=journal
+      StandardError=journal
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Create systemd timer for vault reconfiguration
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/vault-reconfigure.timer
+    mode: "0644"
+    owner: root
+    group: root
+    content: |
+      [Unit]
+      Description=Vault reconfiguration timer
+      Requires=vault-reconfigure.service
+
+      [Timer]
+      OnBootSec=5min
+      OnUnitActiveSec={{ in_vault_reconfigure_interval }}
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
+- name: Enable vault-reconfigure timer
+  ansible.builtin.systemd:
+    name: vault-reconfigure.timer
+    enabled: true
+    daemon_reload: true
+    state: started
+
+- name: Flush all handlers before unsealing
+  meta: flush_handlers
+
+- name: Ensure Vault is unsealed after playbook execution
+  ansible.builtin.command: /usr/local/bin/vault-unseal.sh
+  register: unseal_result
+  changed_when: "'Vault is not sealed' not in unseal_result.stdout"
+  environment:
+    VAULT_SKIP_VERIFY: "{{ 'true' if not in_vault_tls_disabled else 'false' }}"

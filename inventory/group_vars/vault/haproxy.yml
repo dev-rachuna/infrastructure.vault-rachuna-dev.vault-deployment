@@ -1,0 +1,55 @@
+---
+inv_group_haproxy_config:
+  global:
+    maxconn: 4096
+    log:
+      - "/dev/log local0"
+      - "/dev/log local1 notice"
+
+  defaults:
+    mode: tcp
+    timeout_connect: "5s"
+    timeout_client: "50s"
+    timeout_server: "50s"
+    log: global
+    options:
+      - tcplog
+
+  stats:
+    enabled: true
+    bind: "*:8404"
+    uri: "/stats"
+    refresh: "30s"
+
+  frontends:
+    - name: https_front
+      bind: "*:443"
+      mode: tcp
+      extra_lines:
+        - "tcp-request inspect-delay 5s"
+        - "tcp-request content accept if { req_ssl_hello_type 1 }"
+        - "use_backend vault_back if { req_ssl_sni vault.rachuna.dev }"
+
+  # Backend z trzema nodami Vault (TCP passthrough)
+  backends:
+    - name: vault_back
+      mode: tcp
+      balance: first
+      options:
+        - httpchk
+      http_check:
+        send: "meth GET uri /v1/sys/health?sealedcode=503&standbycode=429 ver HTTP/1.1 hdr Host vault.rachuna.dev"
+        expect: "status 200"
+      servers:
+        - name: vault-1005
+          address: "vault-1005.{{ inv_all_root_root_domain }}"
+          port: 8200
+          params: "check check-ssl verify none check-sni vault.rachuna.dev"
+        - name: vault-1006
+          address: "vault-1006.{{ inv_all_root_root_domain }}"
+          port: 8200
+          params: "check check-ssl verify none check-sni vault.rachuna.dev"
+        - name: vault-1007
+          address: "vault-1007.{{ inv_all_root_root_domain }}"
+          port: 8200
+          params: "check check-ssl verify none check-sni vault.rachuna.dev"

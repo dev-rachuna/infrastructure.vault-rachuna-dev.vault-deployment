@@ -1,0 +1,33 @@
+#!/bin/bash
+{% if in_vault_tls_disabled == true %}
+export VAULT_ADDR="http://{{ in_node_fqdn }}:8200"
+{% else %}
+export VAULT_ADDR="https://{{ in_node_fqdn }}:8200"
+export VAULT_SKIP_VERIFY=true
+{% endif %}
+export KEY_FILE="/etc/vault.d/unseal_keys.json"
+export MAX_WAIT=60
+
+echo "[vault-unseal] Waiting for Vault at $VAULT_ADDR..."
+
+for i in $(seq 1 $MAX_WAIT); do
+  if curl -sk "$VAULT_ADDR/v1/sys/health" >/dev/null 2>&1; then
+    echo "[vault-unseal] Vault is reachable, attempting to unseal..."
+    break
+  fi
+  sleep 2
+done
+
+SEALED=$(curl -sk "$VAULT_ADDR/v1/sys/health" -o /dev/null -w "%{http_code}")
+if [ "$SEALED" != "503" ]; then
+  echo "[vault-unseal] Vault is not sealed (HTTP status: $SEALED). Nothing to do."
+  exit 0
+fi
+
+i=0
+for key in $(jq -r '.unseal_keys[]' "$KEY_FILE"); do
+  echo "[vault-unseal] Sending unseal key $((++i))..."
+  vault operator unseal "$key" || exit 1
+done
+
+vault status
